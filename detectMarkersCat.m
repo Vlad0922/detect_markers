@@ -1,8 +1,9 @@
-function detectMarkersCat(fname)
+function tracks = detectMarkersCat(fname)    
+    settings = getDefaultSettings();
+    
     obj = setupSystemObjects(fname);
-
     tracks = initializeTracks(); 
-
+    
     nextId = 1; 
 
     while hasFrame(obj.reader)
@@ -19,8 +20,15 @@ function detectMarkersCat(fname)
 
         displayTrackingResults();
     end
+    
+    function settings = getDefaultSettings()
+        settings = struct();
+        settings.colorCoefs = [1 -0.5 -0.5]; % red default
+        settings.colorThreshold = 40;
+        settings.blobSize = 200;        
+    end
 
-     function obj = setupSystemObjects(fname)
+    function obj = setupSystemObjects(fname)
         % ?????????????? ??????/?????? ????? + blobAnalyzer ??? ???????
         % ?????????
 
@@ -31,8 +39,8 @@ function detectMarkersCat(fname)
 
         obj.blobAnalyser = vision.BlobAnalysis('BoundingBoxOutputPort', true, ...
             'AreaOutputPort', true, 'CentroidOutputPort', true, ...
-            'MinimumBlobArea', 200);
-     end
+            'MinimumBlobArea', settings.blobSize);
+    end
 
      function tracks = initializeTracks()
         tracks = struct(...
@@ -41,19 +49,23 @@ function detectMarkersCat(fname)
             'kalmanFilter', {}, ...
             'age', {}, ...
             'totalVisibleCount', {}, ...
-            'consecutiveInvisibleCount', {});
+            'consecutiveInvisibleCount', {}, ...
+            'history', cell({}), ...
+            'name', 'unnamed');
      end
 
     function mask = detectWithColor(img)
         % ? ?????? ?????? ???????? ??????? ???????? ??????
         % ????????? ????? ??? ??? ??????? ? ???????.
-        r = img(:,:,1);
-        g = img(:,:,2);
-        b = img(:,:,3);
+        r = double(img(:,:,1));
+        g = double(img(:,:,2));
+        b = double(img(:,:,3));
 
-        justRed = r - g/2 - b/2;
+        justRed = r*settings.colorCoefs(1) + ...
+                  g*settings.colorCoefs(2) + ...
+                  b*settings.colorCoefs(3);
 
-        mask = justRed > 40;
+        mask = justRed > settings.colorThreshold;
     end
 
     function [centroids, bboxes, mask] = detectObjects(frame)
@@ -77,6 +89,7 @@ function detectMarkersCat(fname)
 
             % ???????? ??????? ??????? ? ??????????????
             predictedCentroid = int32(predictedCentroid) - bbox(3:4) / 2;
+            tracks(i).history{end + 1} = tracks(i).bbox;
             tracks(i).bbox = [predictedCentroid, bbox(3:4)];
         end
     end
@@ -163,8 +176,11 @@ function detectMarkersCat(fname)
                 'kalmanFilter', kalmanFilter, ...
                 'age', 1, ...
                 'totalVisibleCount', 1, ...
-                'consecutiveInvisibleCount', 0);
-
+                'consecutiveInvisibleCount', 0, ...
+                'history', cell({bbox}), ...
+                'name', string(nextId));
+            
+            newTrack.history = cell({bbox});
             tracks(end + 1) = newTrack;
 
             nextId = nextId + 1;
