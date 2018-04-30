@@ -1,13 +1,26 @@
-function tracks = detectMarkersCat(fname)    
+function tracks = detectMarkersCat(fname, options)
+    if ~isfield(options, 'use_pixels'), options.use_pixels=1; end
+    size_set=0;
+    
     settings = getDefaultSettings();
     
     obj = setupSystemObjects(fname);
     tracks = initializeTracks(); 
     
     nextId = 1; 
-
+    frameCount = 0;
+    
+%     settingsFig();
+    
     while hasFrame(obj.reader)
         frame = readFrame(obj.reader);
+        frameCount = frameCount + 1;
+        
+        if ~options.use_pixels && ~size_set
+            size_ratio = setSize(frame);
+            size_set = 1;
+        end
+        
         [centroids, bboxes, mask] = detectObjects(frame);
         predictNewLocationsOfTracks();
         [assignments, unassignedTracks, unassignedDetections] = ...
@@ -21,9 +34,11 @@ function tracks = detectMarkersCat(fname)
         displayTrackingResults();
     end
     
+    fprintf('video %s processed!\n', fname);
+    
     function settings = getDefaultSettings()
         settings = struct();
-        settings.colorCoefs = [1 -0.5 -0.5]; % red default
+        settings.colorCoefs = [1 -0.5 -0.5];
         settings.colorThreshold = 40;
         settings.blobSize = 200;        
     end
