@@ -1,6 +1,5 @@
 function tracks = detectMarkersCat(fname, options)
     if ~isfield(options, 'use_pixels'), options.use_pixels=1; end
-    size_set=0;
     
     settings = getDefaultSettings();
     
@@ -10,16 +9,16 @@ function tracks = detectMarkersCat(fname, options)
     nextId = 1; 
     frameCount = 0;
     
+    if ~options.use_pixels
+        size_ratio = getSizeRatio(fname);
+    else
+        size_ratio = 1.;
+    end
 %     settingsFig();
     
     while hasFrame(obj.reader)
         frame = readFrame(obj.reader);
         frameCount = frameCount + 1;
-        
-        if ~options.use_pixels && ~size_set
-            size_ratio = setSize(frame);
-            size_set = 1;
-        end
         
         [centroids, bboxes, mask] = detectObjects(frame);
         predictNewLocationsOfTracks();
@@ -55,6 +54,13 @@ function tracks = detectMarkersCat(fname, options)
         obj.blobAnalyser = vision.BlobAnalysis('BoundingBoxOutputPort', true, ...
             'AreaOutputPort', true, 'CentroidOutputPort', true, ...
             'MinimumBlobArea', settings.blobSize);
+    end
+
+    function ratio = getSizeRatio(fname)
+        reader = VideoReader(fname);
+        frame = readFrame(reader);
+        
+        ratio = setSize(frame);
     end
 
      function tracks = initializeTracks()
