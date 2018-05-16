@@ -2,19 +2,13 @@ function tracks = detectMarkersCat(fname, options)
     if ~isfield(options, 'use_pixels'), options.use_pixels=1; end
     
     settings = getDefaultSettings();
+    fillSettings(options);
     
     obj = setupSystemObjects(fname);
     tracks = initializeTracks(); 
     
     nextId = 1; 
     frameCount = 0;
-    
-    if ~options.use_pixels
-        size_ratio = getSizeRatio(fname);
-    else
-        size_ratio = 1.;
-    end
-%     settingsFig();
     
     while hasFrame(obj.reader)
         frame = readFrame(obj.reader);
@@ -42,6 +36,23 @@ function tracks = detectMarkersCat(fname, options)
         settings.blobSize = 200;        
     end
 
+    function fillSettings(options)
+        reader = VideoReader(fname);
+        frame = readFrame(reader);
+        
+        if ~options.use_pixels
+            sizeRatio = setSize(frame);
+        else
+            sizeRatio = 1.;
+        end
+        
+        if isfield(options, 'detectorSettings')
+            settings.detectorSettings = options.detectorSettings;
+        else
+            settings.detectorSettings = selectThreshold(frame);
+        end
+    end
+
     function obj = setupSystemObjects(fname)
         % ?????????????? ??????/?????? ????? + blobAnalyzer ??? ???????
         % ?????????
@@ -56,10 +67,7 @@ function tracks = detectMarkersCat(fname, options)
             'MinimumBlobArea', settings.blobSize);
     end
 
-    function ratio = getSizeRatio(fname)
-        reader = VideoReader(fname);
-        frame = readFrame(reader);
-        
+    function ratio = getSizeRatio(fname)       
         ratio = setSize(frame);
     end
 
@@ -75,23 +83,24 @@ function tracks = detectMarkersCat(fname, options)
             'name', 'unnamed');
      end
 
-    function mask = detectWithColor(img)
+    function mask = detectWithColor(img, params)
         % ? ?????? ?????? ???????? ??????? ???????? ??????
         % ????????? ????? ??? ??? ??????? ? ???????.
+      
         r = double(img(:,:,1));
         g = double(img(:,:,2));
         b = double(img(:,:,3));
 
-        justRed = r*settings.colorCoefs(1) + ...
-                  g*settings.colorCoefs(2) + ...
-                  b*settings.colorCoefs(3);
+        justRed = params.colorCoefs(1)*r + ...
+                  params.colorCoefs(2)*g + ...
+                  params.colorCoefs(3)*b;
 
-        mask = justRed > settings.colorThreshold;
+        mask = justRed > params.colorThreshold;
     end
 
     function [centroids, bboxes, mask] = detectObjects(frame)
         % ?????????????? ?????, ?????????? ?????? ?? ??????
-        mask = detectWithColor(frame);
+        mask = detectWithColor(frame, settings.detectorSettings);
 
         % ??????? ???
         mask = imopen(mask, strel('rectangle', [6, 6]));
@@ -199,7 +208,7 @@ function tracks = detectMarkersCat(fname, options)
                 'totalVisibleCount', 1, ...
                 'consecutiveInvisibleCount', 0, ...
                 'history', cell({bbox}), ...
-                'name', string(nextId));
+                'name', int2str(nextId));
             
             newTrack.history = cell({bbox});
             tracks(end + 1) = newTrack;
