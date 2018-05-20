@@ -5,7 +5,7 @@ function tracks = detectMarkersCat(fname, options)
     fillSettings(options);
     
     obj = setupSystemObjects(fname);
-    tracks = initializeTracks(); 
+    tracks = initializeTracks();    
     
     nextId = 1; 
     frameCount = 0;
@@ -27,6 +27,8 @@ function tracks = detectMarkersCat(fname, options)
         displayTrackingResults();
     end
     
+    
+    saveTracks(tracks, fname);
     fprintf('video %s processed!\n', fname);
     
     function settings = getDefaultSettings()
@@ -49,7 +51,7 @@ function tracks = detectMarkersCat(fname, options)
         if isfield(options, 'detectorSettings')
             settings.detectorSettings = options.detectorSettings;
         else
-            settings.detectorSettings = selectThreshold(frame);
+            settings.detectorSettings = selectThreshold(reader);
         end
     end
 
@@ -85,17 +87,20 @@ function tracks = detectMarkersCat(fname, options)
 
     function mask = detectWithColor(img, params)
         % ? ?????? ?????? ???????? ??????? ???????? ??????
-        % ????????? ????? ??? ??? ??????? ? ???????.
-      
+        % ????????? ????? ??? ??? ??????? ? ???????.      
         r = double(img(:,:,1));
         g = double(img(:,:,2));
         b = double(img(:,:,3));
+        
+        mask = zeros(size(r), 'logical');
+        
+        for i = 1:numel(params)
+            curr_color = params{i}.colorCoefs(1)*r + ...
+                      params{i}.colorCoefs(2)*g + ...
+                      params{i}.colorCoefs(3)*b;              
 
-        justRed = params.colorCoefs(1)*r + ...
-                  params.colorCoefs(2)*g + ...
-                  params.colorCoefs(3)*b;
-
-        mask = justRed > params.colorThreshold;
+            mask = mask | (curr_color > params{i}.colorThreshold);
+        end
     end
 
     function [centroids, bboxes, mask] = detectObjects(frame)
@@ -247,5 +252,16 @@ function tracks = detectMarkersCat(fname, options)
         
         obj.maskPlayer.step(mask);
         obj.videoPlayer.step(frame);
+    end
+
+    function saveTracks(tracks, fname)
+        getCentroid = @(bbox) [bbox(1) + bbox(3)/2 bbox(2) + bbox(4)/2];
+        centroids = {};
+
+        for i = 1:numel(tracks)
+            centroids{i} = cellfun(getCentroid, tracks(i).history, 'UniformOutput', 0);
+        end
+
+        save(strcat(fname, '_centroids', 'centroids'));
     end
 end
