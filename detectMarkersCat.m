@@ -43,9 +43,9 @@ function tracks = detectMarkersCat(fname, options)
         frame = readFrame(reader);
         
         if ~options.use_pixels
-            sizeRatio = setSize(frame);
+            settings.sizeRatio = setSize(frame);
         else
-            sizeRatio = 1.;
+            settings.sizeRatio = 1.;
         end
         
         if isfield(options, 'detectorSettings')
@@ -255,7 +255,7 @@ function tracks = detectMarkersCat(fname, options)
     end
 
     function saveTracks(tracks, fname)
-        getCentroid = @(bbox) [bbox(1) + bbox(3)/2 bbox(2) + bbox(4)/2];
+        getCentroid = @(bbox) [bbox(1) + bbox(3)/2 bbox(2) + bbox(4)/2]*settings.size_ratio;
         centroids = {};
 
         for i = 1:numel(tracks)
