@@ -1,5 +1,9 @@
 function tracks = detectMarkersCat(fname, options)
-    if ~isfield(options, 'use_pixels'), options.use_pixels=1; end
+    if ~isfield(options, 'use_pixels'), options.use_pixels=true; end
+    if ~isfield(options, 'play_video'), options.play_video=true; end
+    if ~isfield(options, 'use_morphology'), options.use_morphology=true; end
+    
+    textprogressbar(fname);
     
     settings = fillSettings(options);
     
@@ -22,13 +26,17 @@ function tracks = detectMarkersCat(fname, options)
         updateUnassignedTracks();
         deleteLostTracks();
         createNewTracks();
-
-        displayTrackingResults();
+        
+        if options.play_video
+            displayTrackingResults();
+        end
+        
+        textprogressbar(obj.reader.CurrentTime/obj.reader.Duration*100);
     end
-    
     
     saveTracks(tracks, fname);
     fprintf('video %s processed!\n', fname);
+    textprogressbar('done');
    
     function settings=fillSettings(options)
         settings = struct();
@@ -54,9 +62,11 @@ function tracks = detectMarkersCat(fname, options)
         % ?????????
 
         obj.reader = VideoReader(fname);
-
-        obj.maskPlayer = vision.VideoPlayer('Position', [740, 400, 700, 400]);
-        obj.videoPlayer = vision.VideoPlayer('Position', [20, 400, 700, 400]);
+        
+        if options.play_video
+            obj.maskPlayer = vision.VideoPlayer('Position', [740, 400, 700, 400]);
+            obj.videoPlayer = vision.VideoPlayer('Position', [20, 400, 700, 400]);
+        end
         
         blobs = cell({});
         
@@ -109,9 +119,11 @@ function tracks = detectMarkersCat(fname, options)
             curr_mask = detectWithColor(frame, settings.detectorSettings{i});
 
             % ??????? ???
-            curr_mask = imopen(curr_mask, strel('rectangle', [6, 6]));
-            curr_mask = imclose(curr_mask, strel('rectangle', [50, 50]));
-            curr_mask = imfill(curr_mask, 'holes');
+            if options.use_morphology
+                curr_mask = imopen(curr_mask, strel('rectangle', [6, 6]));
+                curr_mask = imclose(curr_mask, strel('rectangle', [50, 50]));
+                curr_mask = imfill(curr_mask, 'holes');
+            end
 
             % ??????? ??????????
             [~, curr_centroids, curr_bboxes] = blobs{i}.step(curr_mask);
@@ -262,7 +274,7 @@ function tracks = detectMarkersCat(fname, options)
     end
 
     function saveTracks(tracks, fname)
-        getCentroid = @(bbox) [bbox(1) + bbox(3)/2 bbox(2) + bbox(4)/2]*settings.size_ratio;
+        getCentroid = @(bbox) [bbox(1) + bbox(3)/2 bbox(2) + bbox(4)/2]*settings.sizeRatio;
         centroids = {};
 
         for i = 1:numel(tracks)
