@@ -1,10 +1,9 @@
 function tracks = detectMarkersCat(fname, options)
     if ~isfield(options, 'use_pixels'), options.use_pixels=1; end
     
-    settings = getDefaultSettings();
-    fillSettings(options);
+    settings = fillSettings(options);
     
-    obj = setupSystemObjects(fname);
+    [obj, blobs] = setupSystemObjects(fname);
     tracks = initializeTracks();    
     
     nextId = 1; 
@@ -30,15 +29,10 @@ function tracks = detectMarkersCat(fname, options)
     
     saveTracks(tracks, fname);
     fprintf('video %s processed!\n', fname);
-    
-    function settings = getDefaultSettings()
+   
+    function settings=fillSettings(options)
         settings = struct();
-        settings.colorCoefs = [1 -0.5 -0.5];
-        settings.colorThreshold = 40;
-        settings.blobSize = 200;        
-    end
-
-    function fillSettings(options)
+        
         reader = VideoReader(fname);
         frame = readFrame(reader);
         
@@ -55,7 +49,7 @@ function tracks = detectMarkersCat(fname, options)
         end
     end
 
-    function obj = setupSystemObjects(fname)
+    function [obj, blobs] = setupSystemObjects(fname)
         % ?????????????? ??????/?????? ????? + blobAnalyzer ??? ???????
         % ?????????
 
@@ -63,17 +57,22 @@ function tracks = detectMarkersCat(fname, options)
 
         obj.maskPlayer = vision.VideoPlayer('Position', [740, 400, 700, 400]);
         obj.videoPlayer = vision.VideoPlayer('Position', [20, 400, 700, 400]);
+        
+        blobs = cell({});
+        
+        for i = 1:numel(settings.detectorSettings)
+             blobAnalyser = vision.BlobAnalysis('BoundingBoxOutputPort', true, ...
+                                'AreaOutputPort', true, 'CentroidOutputPort', true, ...
+                                'MinimumBlobArea', settings.detectorSettings{i}.minBlobSize, ...
+                                'MaximumBlobArea', settings.detectorSettings{i}.maxBlobSize);
+                            
+             blobs{i} = blobAnalyser;
+        end
 
-        obj.blobAnalyser = vision.BlobAnalysis('BoundingBoxOutputPort', true, ...
-            'AreaOutputPort', true, 'CentroidOutputPort', true, ...
-            'MinimumBlobArea', settings.blobSize);
+
     end
 
-    function ratio = getSizeRatio(fname)       
-        ratio = setSize(frame);
-    end
-
-     function tracks = initializeTracks()
+    function tracks = initializeTracks()
         tracks = struct(...
             'id', {}, ...
             'bbox', {}, ...
@@ -83,7 +82,7 @@ function tracks = detectMarkersCat(fname, options)
             'consecutiveInvisibleCount', {}, ...
             'history', cell({}), ...
             'name', 'unnamed');
-     end
+    end
 
     function mask = detectWithColor(img, params)
         % ? ?????? ?????? ???????? ??????? ???????? ??????
@@ -91,29 +90,37 @@ function tracks = detectMarkersCat(fname, options)
         r = double(img(:,:,1));
         g = double(img(:,:,2));
         b = double(img(:,:,3));
-        
-        mask = zeros(size(r), 'logical');
-        
-        for i = 1:numel(params)
-            curr_color = params{i}.colorCoefs(1)*r + ...
-                      params{i}.colorCoefs(2)*g + ...
-                      params{i}.colorCoefs(3)*b;              
+     
+        curr_color = params.colorCoefs(1)*r + ...
+                      params.colorCoefs(2)*g + ...
+                      params.colorCoefs(3)*b;    
 
-            mask = mask | (curr_color > params{i}.colorThreshold);
-        end
+        mask = curr_color > params.colorThreshold;
     end
 
     function [centroids, bboxes, mask] = detectObjects(frame)
         % ?????????????? ?????, ?????????? ?????? ?? ??????
-        mask = detectWithColor(frame, settings.detectorSettings);
+        
+        centroids = [];
+        bboxes = [];
+        mask = zeros(size(frame, 1), size(frame, 2), 'logical');
+        
+        for i = 1:numel(settings.detectorSettings)
+            curr_mask = detectWithColor(frame, settings.detectorSettings{i});
 
-        % ??????? ???
-        mask = imopen(mask, strel('rectangle', [6, 6]));
-        mask = imclose(mask, strel('rectangle', [50, 50]));
-        mask = imfill(mask, 'holes');
+            % ??????? ???
+            curr_mask = imopen(curr_mask, strel('rectangle', [6, 6]));
+            curr_mask = imclose(curr_mask, strel('rectangle', [50, 50]));
+            curr_mask = imfill(curr_mask, 'holes');
 
-        % ??????? ??????????
-        [~, centroids, bboxes] = obj.blobAnalyser.step(mask);
+            % ??????? ??????????
+            [~, curr_centroids, curr_bboxes] = blobs{i}.step(curr_mask);
+            
+            centroids = vertcat(centroids, curr_centroids);
+            bboxes = vertcat(bboxes, curr_bboxes);
+            
+            mask = mask | curr_mask;
+        end
     end
 
     function predictNewLocationsOfTracks()
