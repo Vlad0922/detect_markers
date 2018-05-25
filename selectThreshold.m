@@ -1,5 +1,9 @@
 function threshParams=selectThreshold(reader)
 
+if ischar(reader)
+    reader = VideoReader(reader);
+end
+
 blobs = cell({});
 frame = [];
 img = [];
