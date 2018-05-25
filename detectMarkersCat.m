@@ -113,7 +113,7 @@ function tracks = detectMarkersCat(fname, options)
         
         centroids = [];
         bboxes = [];
-        mask = zeros(size(frame, 1), size(frame, 2), 'logical');
+        mask = zeros(size(frame, 1), size(frame, 2), 'uint8');
         
         for i = 1:numel(settings.detectorSettings)
             curr_mask = detectWithColor(frame, settings.detectorSettings{i});
