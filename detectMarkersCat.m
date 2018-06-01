@@ -3,7 +3,7 @@ function tracks = detectMarkersCat(fname, options)
     if ~isfield(options, 'play_video'), options.play_video=true; end
     if ~isfield(options, 'use_morphology'), options.use_morphology=true; end
     
-    textprogressbar(fname);
+%     textprogressbar(fname);
     
     settings = fillSettings(options);
     
@@ -21,7 +21,7 @@ function tracks = detectMarkersCat(fname, options)
         predictNewLocationsOfTracks();
         [assignments, unassignedTracks, unassignedDetections] = ...
             detectionToTrackAssignment();
-
+        
         updateAssignedTracks();
         updateUnassignedTracks();
         deleteLostTracks();
@@ -31,12 +31,12 @@ function tracks = detectMarkersCat(fname, options)
             displayTrackingResults();
         end
         
-        textprogressbar(obj.reader.CurrentTime/obj.reader.Duration*100);
+%         textprogressbar(obj.reader.CurrentTime/obj.reader.Duration*100);
     end
     
     saveTracks(tracks, fname);
     fprintf('video %s processed!\n', fname);
-    textprogressbar('done');
+%     textprogressbar('done');
    
     function settings=fillSettings(options)
         settings = struct();
@@ -90,7 +90,7 @@ function tracks = detectMarkersCat(fname, options)
             'age', {}, ...
             'totalVisibleCount', {}, ...
             'consecutiveInvisibleCount', {}, ...
-            'history', cell({}), ...
+            'history', [], ...
             'name', 'unnamed');
     end
 
@@ -143,7 +143,7 @@ function tracks = detectMarkersCat(fname, options)
 
             % ???????? ??????? ??????? ? ??????????????
             predictedCentroid = int32(predictedCentroid) - bbox(3:4) / 2;
-            tracks(i).history{end + 1} = tracks(i).bbox;
+            tracks(i).history = vertcat(tracks(i).history, tracks(i).bbox);
             tracks(i).bbox = [predictedCentroid, bbox(3:4)];
         end
     end
@@ -231,10 +231,9 @@ function tracks = detectMarkersCat(fname, options)
                 'age', 1, ...
                 'totalVisibleCount', 1, ...
                 'consecutiveInvisibleCount', 0, ...
-                'history', cell({bbox}), ...
+                'history', bbox, ...
                 'name', int2str(nextId));
             
-            newTrack.history = cell({bbox});
             tracks(end + 1) = newTrack;
 
             nextId = nextId + 1;
@@ -244,7 +243,10 @@ function tracks = detectMarkersCat(fname, options)
     function displayTrackingResults()
         % ????? ?????? ???? uint8, ? ?? ???????
         mask = uint8(repmat(mask, [1, 1, 3])) .* 255;
-
+        
+        mask_detected = mask;
+        frame_detected = frame;
+        
         minVisibleCount = 8;
         if ~isempty(tracks)
             reliableTrackInds = ...
@@ -266,9 +268,23 @@ function tracks = detectMarkersCat(fname, options)
                     bboxes, labels);
                 mask = insertObjectAnnotation(mask, 'rectangle', ...
                     bboxes, labels);
+                
+                if options.debug
+                    if any(predictedTrackInds)
+                        correctIdx = find(cellfun(@(c) ~isempty(c), isPredicted));
+
+                        frame_detected = insertObjectAnnotation(frame_detected, 'rectangle', ...
+                            bboxes(correctIdx, :), labels(correctIdx));
+                        mask_detected = insertObjectAnnotation(mask_detected, 'rectangle', ...
+                            bboxes(correctIdx, :), labels(correctIdx));
+
+                        imwrite(frame_detected, sprintf('%s_%d_frame.png', fname, frameCount));
+                        imwrite(mask_detected, sprintf('%s_%d_mask.png', fname, frameCount));
+                    end
+                end
             end
         end
-        
+                
         obj.maskPlayer.step(mask);
         obj.videoPlayer.step(frame);
     end
@@ -278,7 +294,7 @@ function tracks = detectMarkersCat(fname, options)
         centroids = {};
 
         for i = 1:numel(tracks)
-            centroids{i} = cellfun(getCentroid, tracks(i).history, 'UniformOutput', 0);
+            centroids{i} = cellfun(getCentroid, num2cell(tracks(i).history, 2), 'UniformOutput', 0);
         end
 
         save(strcat(fname, '_centroids', 'centroids'));
